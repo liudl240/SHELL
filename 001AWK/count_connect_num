@@ -1,0 +1,8 @@
+#!/bin/bash
+#_author_:james.liu
+#ybooks.liu@gmail.com
+#Thu Jan 10 14:19:32 CST 2019
+##################################
+#查看各个状态的连接数
+#################################
+netstat -n | awk '/^tcp/ {++S[$NF]} END {for(a in S) print a, S[a]}'

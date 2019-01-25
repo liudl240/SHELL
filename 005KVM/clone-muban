@@ -1,0 +1,117 @@
+#!/bin/bash
+# exit code: 
+#    65 -> user input nothing
+#    66 -> user input is not a number
+#    67 -> user input out of range
+#    68 -> vm disk image exists
+
+
+######################################################
+###克隆机器
+###automac
+###qemu-img create -f qcow2 -b
+###virsh define
+######################################################
+
+IMG_DIR=/var/lib/libvirt/images
+BASEVM=MUBAN
+automac=52:`h=0123456789ABCDEF;for c in {1..10};do echo -n ${h:$(($RANDOM%16)):1};if [[ $((c%2)) = 0 && $c != 10 ]];then echo -n :;fi;done;echo
+`
+read -p "Enter VM name: " VMNAME
+if [ -z $VMNAME ];then
+	echo "you must input name of VM"
+fi	
+
+NEWVM=${VMNAME}
+
+if [ -e $IMG_DIR/${NEWVM}.qcow2 ]; then
+    echo "File exists."
+    exit 68
+fi
+
+echo -en "Creating Virtual Machine disk image......\t"
+qemu-img create -f qcow2 -b $IMG_DIR/.${BASEVM}.qcow2 $IMG_DIR/${NEWVM}.qcow2 &> /dev/null
+echo -e "\e[32;1m[OK]\e[0m"
+
+cat $IMG_DIR/.MUBAN.xml > $IMG_DIR/$NEWVM.xml
+sed -i "/<name>${BASEVM}/s/${BASEVM}/${NEWVM}/" $IMG_DIR/$NEWVM.xml
+sed -i "/uuid/s/<uuid>.*<\/uuid>/<uuid>$(uuidgen)<\/uuid>/" $IMG_DIR/$NEWVM.xml
+sed -i "/${BASEVM}\.qcow2/s/\.${BASEVM}/${NEWVM}/" $IMG_DIR/$NEWVM.xml
+
+sed -i "/<mac address/s/52:54:00:8f:d7:4d/$automac/" $IMG_DIR/$NEWVM.xml
+
+
+
+
+echo -en "Defining new virtual machine......\t\t"
+virsh define $IMG_DIR/$NEWVM.xml &> /dev/null
+echo -e "\e[32;1m[OK]\e[0m"
+
+######################################################
+###设置IP地址
+###virt-copy-in
+######################################################
+
+
+cat <<EOF
+#############################################
+######正在初始化信息.....#######
+#############################################
+EOF
+
+while :
+do
+        read -p "请输入IP地址[192.168.122.]:" IP
+
+        if [ ! -z $IP  ];then
+                echo "你的IP是:$IP"
+                break
+        fi
+done
+
+IPFILE="/var/lib/libvirt/images/ifcfg-ens3"
+IPDIR=/etc/sysconfig/network-scripts/
+sed -i "8s/.*/IPADDR=$IP/" $IPFILE
+
+
+echo "正在设置IP:$IP"
+cpin=$(/usr/bin/virt-copy-in  -d  $VMNAME  $IPFILE $IPDIR)
+if [ $cpin ];then
+        echo "IP设置没成功.."
+else
+        echo "IP已经设置为$IP.."
+fi
+
+#########
+##启动机器
+virsh start $VMNAME
+echo "正在启动网卡.."
+sleep 70
+echo "正在启动完成."
+cat <<EOF
+用户名:root
+密码:hicomadmin
+IP:$IP
+镜像位置:/var/lib/libvirt/images
+详情请联系:liudl24@163.com
+快速连接机器使用:$VMNAME
+>..
+
+EOF
+#########
+
+##############################
+####最后的完善
+####  host=/etc/hosts  alias=/etc/bashrc ssh=ssh-copy
+##################################################
+
+HOST="/etc/hosts"
+ALIAS="/etc/bashrc"
+SSH=$(/usr/bin/ssh-copy-id root@$IP )
+
+echo -e "$IP\t $VMNAME" >>$HOST && echo "write in to $HOST"
+echo "alias $VMNAME='ssh root@$IP'" >>$ALIAS && echo "write in to ALIAS"
+
+
+source $ALIAS
+echo "初始化完成"

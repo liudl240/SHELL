@@ -1,0 +1,33 @@
+#!/bin/bash
+#Wed Dec  5 18:18:27 CST 2018
+#james.liu
+#自动部署
+##打包
+##上线
+###################################################################
+BAK_DIR="/WebStandby/ALLBAK/prod_pc"
+BAK_PAK="pc$(date +%F).$(date +%s).tgz"
+STANDBY_DIR="/WebStandby/prod_pc"
+WEB_DIR="/webroot/prod_pc"
+
+#########################
+BKP(){
+	echo   "开始备份打包文件$BAK_PAK至目录: $BAK_DIR"
+	tar -cf $BAK_DIR/$BAK_PAK $WEB_DIR &>/dev/null
+	if [ $? ];then
+		echo -e  "/已经备份打包文件$BAK_PAK至目录: $BAK_DIR"
+	else
+		echo -e  "/备份打包文件$BAK_PAK至目录: $BAK_DIR失败"
+		exit 100
+	fi
+}
+DEVPLOP(){
+	rm -rf $WEB_DIR/* && echo "清除目录成功" || exit 100
+	mv $STANDBY_DIR/*  $WEB_DIR && echo "部署完成" || exit  100 
+}
+DELPAK(){
+         find $BAK_DIR -ctime +3 -exec rm -rf {} \;
+}
+DELPAK
+BKP
+DEVPLOP
